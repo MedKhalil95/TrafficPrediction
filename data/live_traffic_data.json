@@ -1,0 +1,50 @@
+{
+  "timestamp": "2026-01-27T09:04:23.718696",
+  "source": "simulated",
+  "data": [
+    {
+      "city_id": 0,
+      "city_name": "Tunis",
+      "lat": 36.8065,
+      "lng": 10.1815,
+      "traffic_level": 2,
+      "traffic_score": 0.9019595176334887,
+      "speed": 51,
+      "congestion": 35,
+      "last_updated": "2026-01-27T09:04:23.718696"
+    },
+    {
+      "city_id": 1,
+      "city_name": "Ariana",
+      "lat": 36.8625,
+      "lng": 10.1956,
+      "traffic_level": 2,
+      "traffic_score": 0.8025925356733371,
+      "speed": 22,
+      "congestion": 71,
+      "last_updated": "2026-01-27T09:04:23.718696"
+    },
+    {
+      "city_id": 2,
+      "city_name": "Sfax",
+      "lat": 34.7406,
+      "lng": 10.7603,
+      "traffic_level": 2,
+      "traffic_score": 0.6844676389670439,
+      "speed": 70,
+      "congestion": 89,
+      "last_updated": "2026-01-27T09:04:23.718696"
+    },
+    {
+      "city_id": 3,
+      "city_name": "Sousse",
+      "lat": 35.8254,
+      "lng": 10.636,
+      "traffic_level": 2,
+      "traffic_score": 0.8972646093884831,
+      "speed": 62,
+      "congestion": 93,
+      "last_updated": "2026-01-27T09:04:23.718696"
+    }
+  ]
+}
