@@ -4,20 +4,23 @@ services:
     env: python
     plan: free
     branch: main
-    # Build: upgrade pip and try installing PyTorch CPU wheels from PyTorch index first,
+    # Build: upgrade pip tools, try to install CPU PyTorch wheels first (recommended on Render),
     # then install the rest of requirements.
     buildCommand: |
+      echo "== Python: $(python --version || echo 'not available')"
       pip install --upgrade pip setuptools wheel
-      # Try to install CPU-only PyTorch wheels (fastest/recommended on Render).
-      # If that fails, fall back to a plain pip install (this may build from source on some platforms).
+      # Try to install CPU-only PyTorch (fastest and avoids CUDA). If that fails, fall back to normal pip install.
       pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision || pip install torch torchvision
       pip install -r requirements.txt
-    # Adjust start command if your app entrypoint differs (e.g., python run.py or uvicorn main:app)
-    startCommand: gunicorn run:app
+    # Start: point Gunicorn at the WSGI app exported by run.py (run.py contains `app = create_app()`).
+    # Bind to Render's $PORT so Render can detect the service health, and use the provided $WEB_CONCURRENCY.
+    startCommand: gunicorn run:app --bind 0.0.0.0:$PORT --workers $WEB_CONCURRENCY
     autoDeploy: true
+    # A simple HTTP health check path
+    healthCheckPath: /
     envVars:
       - key: PYTHONUNBUFFERED
         value: "true"
-      # Optionally set PORT if your app uses it; Render provides $PORT automatically for web services.
-      # - key: PORT
-      #   value: "10000"
+      # Increase Gunicorn timeout for slow cold starts (optional)
+      - key: GUNICORN_CMD_ARGS
+        value: "--timeout 120"
