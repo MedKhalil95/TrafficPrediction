@@ -3,19 +3,14 @@ services:
     name: traffic-prediction
     env: python
     plan: free
-    branch: main
-    # Build installs requirements.txt
-    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
-    # Start gunicorn using the `app` object in run.py
-    startCommand: gunicorn run:app --bind 0.0.0.0:$PORT
-    autoDeploy: true
+
+    pythonVersion: 3.11.7
+
+    buildCommand: pip install --upgrade pip setuptools wheel && pip install -r requirements.txt
+    startCommand: gunicorn run:app
+
     envVars:
-      - key: SECRET_KEY
-        value: "replace-with-a-secure-secret-or-set-in-dashboard"
       - key: FLASK_ENV
-        value: "production"
-    # Optional: if you need a larger instance (or GPU) change plan/instanceType
-    # instanceType: starter
-    # region: oregon
-    healthCheckPath: "/api/system-status"
-    # Optional service-level disk or shell commands can be added if needed.
+        value: production
+      - key: HOST
+        value: 0.0.0.0
