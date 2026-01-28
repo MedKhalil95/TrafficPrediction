@@ -4,5 +4,16 @@ services:
     env: python
     plan: free
     runtime: python-3.10.13
-    buildCommand: pip install -r requirements.txt
+
+    buildCommand: |
+      python --version
+      pip install --upgrade pip
+      pip install --only-binary=:all: -r requirements.txt
+
     startCommand: gunicorn run:app
+
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: FLASK_DEBUG
+        value: "0"
