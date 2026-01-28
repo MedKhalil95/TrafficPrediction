@@ -3,14 +3,21 @@ services:
     name: traffic-prediction
     env: python
     plan: free
-
-    pythonVersion: 3.11.7
-
-    buildCommand: pip install --upgrade pip setuptools wheel && pip install -r requirements.txt
+    branch: main
+    # Build: upgrade pip and try installing PyTorch CPU wheels from PyTorch index first,
+    # then install the rest of requirements.
+    buildCommand: |
+      pip install --upgrade pip setuptools wheel
+      # Try to install CPU-only PyTorch wheels (fastest/recommended on Render).
+      # If that fails, fall back to a plain pip install (this may build from source on some platforms).
+      pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision || pip install torch torchvision
+      pip install -r requirements.txt
+    # Adjust start command if your app entrypoint differs (e.g., python run.py or uvicorn main:app)
     startCommand: gunicorn run:app
-
+    autoDeploy: true
     envVars:
-      - key: FLASK_ENV
-        value: production
-      - key: HOST
-        value: 0.0.0.0
+      - key: PYTHONUNBUFFERED
+        value: "true"
+      # Optionally set PORT if your app uses it; Render provides $PORT automatically for web services.
+      # - key: PORT
+      #   value: "10000"
