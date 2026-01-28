@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="40" height="40" aria-hidden="true">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#3ba0ff"/>
+      <stop offset="100%" stop-color="#007bff"/>
+    </linearGradient>
+  </defs>
+  <!-- Pin shape -->
+  <path fill="url(#grad)" d="M12 2C8.134 2 5 5.134 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.866-3.134-7-7-7z"/>
+  <!-- Inner circle -->
+  <circle cx="12" cy="9" r="2.5" fill="#fff"/>
+  <!-- White border -->
+  <path d="M12 3.5c3.037 0 5.5 2.463 5.5 5.5 0 4.125-5.5 10.875-5.5 10.875S6.5 13.125 6.5 8.999C6.5 5.963 8.963 3.5 12 3.5m0-1C8.14 2.5 5 5.64 5 9.5c0 5.5 7 13 7 13s7-7.5 7-13c0-3.86-3.14-7-7-7z" fill="#ffffff" opacity="0.2"/>
+</svg>

@@ -7,6 +7,7 @@ const TrafficMap = (function() {
     let mapInitialized = false;
     let userLocation = null;
     let userMarker = null;
+    let userIcon = null; // native Leaflet icon for user location
     let currentTrafficMarker = null;
     let cityMarkers = [];
     
@@ -65,6 +66,16 @@ const TrafficMap = (function() {
                 
                 // Add scale
                 L.control.scale({ imperial: false }).addTo(map);
+                
+                // Create native Leaflet icon for user location (uses an SVG placed in static/img)
+                // Served by Flask at /static/...
+                userIcon = L.icon({
+                    iconUrl: '/static/img/user-location.svg',
+                    iconSize: [40, 40],
+                    iconAnchor: [20, 40],
+                    popupAnchor: [0, -42],
+                    className: 'user-location-marker'
+                });
                 
                 // Add location control
                 this.addLocationControl();
@@ -220,41 +231,16 @@ const TrafficMap = (function() {
                 map.removeLayer(userMarker);
             }
             
-            // Create user location marker
+            // Use native Leaflet icon (userIcon) for sharper rendering
             userMarker = L.marker([userLocation.lat, userLocation.lng], {
-                icon: L.divIcon({
-                    html: `
-                        <div style="
-                            background: #007bff;
-                            width: 24px;
-                            height: 24px;
-                            border-radius: 50%;
-                            border: 3px solid white;
-                            box-shadow: 0 0 15px rgba(0,123,255,0.8);
-                            animation: pulse 1.5s infinite;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                        ">
-                            <div style="
-                                width: 8px;
-                                height: 8px;
-                                background: white;
-                                border-radius: 50%;
-                            "></div>
-                        </div>
-                    `,
-                    iconSize: [24, 24],
-                    iconAnchor: [12, 12],
-                    className: 'user-location-marker'
-                })
+                icon: userIcon || undefined
             }).addTo(map);
             
             // Add popup
             userMarker.bindPopup(`
                 <div style="padding: 12px; min-width: 200px;">
                     <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                        <i class="fas fa-user-circle" style="color: #007bff; font-size: 16px;"></i>
+                        <i class="fas fa-location-dot" style="color: #007bff; font-size: 16px;"></i>
                         <strong style="color: #2c3e50;">Your Location</strong>
                     </div>
                     <div style="font-size: 12px; color: #6c757d;">
