@@ -1,23 +1,16 @@
-// map.js - Map functionality for Tunisian Traffic Prediction System
-
-// Map module
+// map.js - Enhanced version
 const TrafficMap = (function() {
     // Private variables
     let map = null;
     let mapInitialized = false;
     let userLocation = null;
     let userMarker = null;
-    let userIcon = null; // native Leaflet icon for user location
     let currentTrafficMarker = null;
-    let cityMarkers = [];
-    
-    // Tunisian cities data
-    const tunisiaCities = {
-        0: { name: "Tunis", lat: 36.8065, lng: 10.1815, zoom: 12 },
-        1: { name: "Ariana", lat: 36.8625, lng: 10.1956, zoom: 12 },
-        2: { name: "Sfax", lat: 34.7406, lng: 10.7603, zoom: 12 },
-        3: { name: "Sousse", lat: 35.8254, lng: 10.6360, zoom: 12 }
-    };
+    let routeLayer = null;
+    let destinationMarker = null;
+    let cityMarkers = {}; // Store city markers by ID
+    let allCitiesLayer = null; // Layer for all city markers
+    let showAllCities = false; // Control whether to show all cities
     
     // Traffic colors
     const trafficColors = {
@@ -26,11 +19,55 @@ const TrafficMap = (function() {
         2: '#dc3545'  // Red for high traffic
     };
     
+    // Traffic icons with different sizes
+    const trafficIcons = {
+        small: {
+            0: L.divIcon({
+                html: `<div style="background:#28a745;width:25px;height:25px;border-radius:50%;border:2px solid white;display:flex;align-items:center;justify-content:center;">
+                    <i class="fas fa-check" style="color:white;font-size:10px;"></i></div>`,
+                iconSize: [25, 25],
+                iconAnchor: [12.5, 12.5]
+            }),
+            1: L.divIcon({
+                html: `<div style="background:#ffc107;width:30px;height:30px;border-radius:50%;border:2px solid white;display:flex;align-items:center;justify-content:center;">
+                    <i class="fas fa-exclamation" style="color:#856404;font-size:12px;"></i></div>`,
+                iconSize: [30, 30],
+                iconAnchor: [15, 15]
+            }),
+            2: L.divIcon({
+                html: `<div style="background:#dc3545;width:35px;height:35px;border-radius:50%;border:2px solid white;display:flex;align-items:center;justify-content:center;">
+                    <i class="fas fa-exclamation-triangle" style="color:white;font-size:14px;"></i></div>`,
+                iconSize: [35, 35],
+                iconAnchor: [17.5, 17.5]
+            })
+        },
+        large: {
+            0: L.divIcon({
+                html: `<div style="background:#28a745;width:45px;height:45px;border-radius:50%;border:3px solid white;box-shadow:0 2px 10px rgba(40,167,69,0.3);display:flex;align-items:center;justify-content:center;">
+                    <i class="fas fa-check" style="color:white;font-size:18px;"></i></div>`,
+                iconSize: [45, 45],
+                iconAnchor: [22.5, 22.5]
+            }),
+            1: L.divIcon({
+                html: `<div style="background:#ffc107;width:50px;height:50px;border-radius:50%;border:3px solid white;box-shadow:0 2px 10px rgba(255,193,7,0.3);display:flex;align-items:center;justify-content:center;">
+                    <i class="fas fa-exclamation" style="color:#856404;font-size:20px;"></i></div>`,
+                iconSize: [50, 50],
+                iconAnchor: [25, 25]
+            }),
+            2: L.divIcon({
+                html: `<div style="background:#dc3545;width:55px;height:55px;border-radius:50%;border:3px solid white;box-shadow:0 2px 15px rgba(220,53,69,0.4);display:flex;align-items:center;justify-content:center;animation:pulse 1.5s infinite;">
+                    <i class="fas fa-exclamation-triangle" style="color:white;font-size:22px;"></i></div>`,
+                iconSize: [55, 55],
+                iconAnchor: [27.5, 27.5]
+            })
+        }
+    };
+    
     // Public methods
     return {
         // Initialize map
         init: function() {
-            console.log("🌍 Initializing map...");
+            console.log("🌍 Initializing enhanced traffic map...");
             
             if (mapInitialized) {
                 console.log("⚠️ Map already initialized");
@@ -57,7 +94,7 @@ const TrafficMap = (function() {
                     attributionControl: false
                 });
                 
-                // Add tiles
+                // Add OpenStreetMap tiles
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                     attribution: '© OpenStreetMap contributors',
                     maxZoom: 18,
@@ -67,55 +104,63 @@ const TrafficMap = (function() {
                 // Add scale
                 L.control.scale({ imperial: false }).addTo(map);
                 
-                // Create native Leaflet icon for user location (uses an SVG placed in static/img)
-                // Served by Flask at /static/...
-                userIcon = L.icon({
-                    iconUrl: '/static/img/user-location.svg',
-                    iconSize: [40, 40],
-                    iconAnchor: [20, 40],
-                    popupAnchor: [0, -42],
-                    className: 'user-location-marker'
-                });
+                // Add custom controls
+                this.addCustomControls();
                 
-                // Add location control
-                this.addLocationControl();
-                
-                // Add legend
+                // Add legend (initially hidden)
                 this.addLegend();
                 
+                // Add CSS for animations
+                this.addMapStyles();
+                
                 mapInitialized = true;
-                console.log("✅ Map initialized successfully");
+                console.log("✅ Enhanced map initialized successfully");
                 
             } catch (error) {
                 console.error("❌ Error initializing map:", error);
-                Utils.showNotification("Error loading map. Please refresh the page.", "error");
+                Utils.showNotification("Error loading map", "error");
             }
         },
         
-        // Add location control
-        addLocationControl: function() {
+        // Add custom controls
+        addCustomControls: function() {
             if (!map) return;
             
+            // Location control
             const locateControl = L.control({ position: 'topleft' });
-            
             locateControl.onAdd = function(map) {
                 const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
                 div.innerHTML = `
-                    <a href="#" title="Locate me" style="display: block; padding: 8px; text-align: center;">
-                        <i class="fas fa-location-crosshairs" style="color: #007bff; font-size: 16px;"></i>
+                    <a href="#" title="Locate Me" style="display:block;padding:8px;text-align:center;border-radius:4px;background:white;">
+                        <i class="fas fa-location-crosshairs" style="color:#007bff;font-size:16px;"></i>
                     </a>
                 `;
-                
                 L.DomEvent.on(div, 'click', function(e) {
                     L.DomEvent.stopPropagation(e);
                     L.DomEvent.preventDefault(e);
                     TrafficMap.locateUser();
                 });
-                
                 return div;
             };
-            
             locateControl.addTo(map);
+            
+            // Toggle cities control
+            const toggleControl = L.control({ position: 'topleft' });
+            toggleControl.onAdd = function(map) {
+                const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
+                div.innerHTML = `
+                    <a href="#" title="Show/Hide Cities" style="display:block;padding:8px;text-align:center;border-radius:4px;background:white;">
+                        <i class="fas fa-city" style="color:#6c757d;font-size:16px;"></i>
+                    </a>
+                `;
+                L.DomEvent.on(div, 'click', function(e) {
+                    L.DomEvent.stopPropagation(e);
+                    L.DomEvent.preventDefault(e);
+                    TrafficMap.toggleAllCities();
+                });
+                return div;
+            };
+            toggleControl.addTo(map);
         },
         
         // Add legend
@@ -123,53 +168,223 @@ const TrafficMap = (function() {
             if (!map) return;
             
             const legend = L.control({ position: 'bottomright' });
-            
             legend.onAdd = function(map) {
                 const div = L.DomUtil.create('div', 'info legend map-legend');
+                div.style.cssText = 'background:white;padding:10px;border-radius:5px;box-shadow:0 2px 5px rgba(0,0,0,0.2);font-size:12px;';
                 div.innerHTML = `
-                    <div class="legend-title">Traffic Legend</div>
-                    <div class="legend-items">
-                        <div class="legend-item">
-                            <span class="legend-color" style="background: #28a745;"></span>
+                    <div style="font-weight:bold;margin-bottom:5px;color:#2c3e50;">
+                        <i class="fas fa-key"></i> Traffic Levels
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:3px;">
+                        <div style="display:flex;align-items:center;gap:5px;">
+                            <div style="width:12px;height:12px;border-radius:50%;background:#28a745;border:1px solid white;"></div>
                             <span>Low Traffic</span>
                         </div>
-                        <div class="legend-item">
-                            <span class="legend-color" style="background: #ffc107;"></span>
+                        <div style="display:flex;align-items:center;gap:5px;">
+                            <div style="width:12px;height:12px;border-radius:50%;background:#ffc107;border:1px solid white;"></div>
                             <span>Medium Traffic</span>
                         </div>
-                        <div class="legend-item">
-                            <span class="legend-color" style="background: #dc3545;"></span>
+                        <div style="display:flex;align-items:center;gap:5px;">
+                            <div style="width:12px;height:12px;border-radius:50%;background:#dc3545;border:1px solid white;"></div>
                             <span>High Traffic</span>
-                        </div>
-                        <div class="legend-item">
-                            <span class="legend-color" style="background: #007bff;"></span>
-                            <span>Your Location</span>
                         </div>
                     </div>
                 `;
                 return div;
             };
-            
             legend.addTo(map);
+        },
+        
+        // Add CSS styles
+        addMapStyles: function() {
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes pulse {
+                    0% { transform: scale(1); opacity: 1; }
+                    50% { transform: scale(1.1); opacity: 0.8; }
+                    100% { transform: scale(1); opacity: 1; }
+                }
+                .city-marker { cursor: pointer; }
+                .selected-city-marker { z-index: 1000 !important; }
+            `;
+            document.head.appendChild(style);
+        },
+        
+        // Toggle all cities visibility
+        toggleAllCities: function() {
+            showAllCities = !showAllCities;
+            
+            if (showAllCities) {
+                this.showAllCitiesOnMap();
+                Utils.showNotification('Showing all Tunisian cities', 'info');
+            } else {
+                this.hideAllCities();
+                Utils.showNotification('Hiding all cities', 'info');
+            }
+        },
+        
+        // Show all cities on map
+        showAllCitiesOnMap: async function() {
+            if (!map) return;
+            
+            // Hide previous layer
+            this.hideAllCities();
+            
+            const cities = window.appData?.cities || {};
+            const markers = [];
+            
+            for (const [cityId, city] of Object.entries(cities)) {
+                // Get traffic data for this city
+                try {
+                    const response = await fetch(`/api/traffic-for-city/${cityId}`);
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        const trafficLevel = data.traffic.level;
+                        const marker = L.marker([city.lat, city.lng], {
+                            icon: trafficIcons.small[trafficLevel],
+                            title: city.name
+                        }).addTo(map);
+                        
+                        marker.bindPopup(`
+                            <div style="min-width:200px;">
+                                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                                    <div style="width:12px;height:12px;border-radius:50%;background:${data.traffic.color}"></div>
+                                    <strong style="color:#2c3e50;">${city.name}</strong>
+                                </div>
+                                <div style="font-size:12px;color:#6c757d;">
+                                    <div><i class="fas fa-traffic-light"></i> ${data.traffic.level_text}</div>
+                                    <div><i class="fas fa-tachometer-alt"></i> ${data.traffic.speed}</div>
+                                    <div><i class="fas fa-clock"></i> ${data.traffic.congestion}</div>
+                                    <div><i class="fas fa-landmark"></i> ${city.governorate || 'Unknown'}</div>
+                                </div>
+                            </div>
+                        `);
+                        
+                        markers.push(marker);
+                        cityMarkers[cityId] = marker;
+                    }
+                } catch (error) {
+                    console.error(`Error fetching traffic for city ${cityId}:`, error);
+                }
+            }
+            
+            // Create layer group
+            allCitiesLayer = L.layerGroup(markers).addTo(map);
+        },
+        
+        // Hide all cities
+        hideAllCities: function() {
+            if (allCitiesLayer) {
+                map.removeLayer(allCitiesLayer);
+                allCitiesLayer = null;
+            }
+            
+            // Clear city markers cache
+            cityMarkers = {};
+        },
+        
+        // Show traffic for specific city (when selected)
+        showCityTraffic: async function(cityId) {
+            if (!map) return;
+            
+            // Clear previous selected city marker
+            if (currentTrafficMarker) {
+                map.removeLayer(currentTrafficMarker);
+                currentTrafficMarker = null;
+            }
+            
+            const city = window.appData?.cities?.[cityId];
+            if (!city) {
+                Utils.showNotification('City not found', 'error');
+                return;
+            }
+            
+            try {
+                // Fetch traffic data for this city
+                const response = await fetch(`/api/traffic-for-city/${cityId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const trafficLevel = data.traffic.level;
+                    
+                    // Create large marker for selected city
+                    currentTrafficMarker = L.marker([city.lat, city.lng], {
+                        icon: trafficIcons.large[trafficLevel],
+                        title: `${city.name} - ${data.traffic.level_text} Traffic`,
+                        className: 'selected-city-marker'
+                    }).addTo(map);
+                    
+                    // Add detailed popup
+                    currentTrafficMarker.bindPopup(`
+                        <div style="min-width:250px;">
+                            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #e9ecef;">
+                                <div style="width:16px;height:16px;border-radius:50%;background:${data.traffic.color};border:2px solid white;"></div>
+                                <strong style="color:#2c3e50;font-size:16px;">${city.name}</strong>
+                                <span style="margin-left:auto;padding:3px 8px;border-radius:12px;background:${data.traffic.color};color:white;font-size:11px;font-weight:bold;">
+                                    ${data.traffic.level_text}
+                                </span>
+                            </div>
+                            <div style="font-size:13px;color:#495057;">
+                                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+                                    <div>
+                                        <div style="font-size:11px;color:#6c757d;">Governorate</div>
+                                        <div><i class="fas fa-landmark"></i> ${city.governorate || 'Unknown'}</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size:11px;color:#6c757d;">Population</div>
+                                        <div><i class="fas fa-users"></i> ${city.population ? city.population.toLocaleString() : 'N/A'}</div>
+                                    </div>
+                                </div>
+                                <div style="background:#f8f9fa;padding:10px;border-radius:5px;margin-bottom:12px;">
+                                    <div style="display:flex;justify-content:space-between;margin-bottom:5px;">
+                                        <span><i class="fas fa-tachometer-alt"></i> Average Speed:</span>
+                                        <strong style="color:${data.traffic.color}">${data.traffic.speed}</strong>
+                                    </div>
+                                    <div style="display:flex;justify-content:space-between;margin-bottom:5px;">
+                                        <span><i class="fas fa-clock"></i> Current Condition:</span>
+                                        <strong>${data.traffic.congestion}</strong>
+                                    </div>
+                                    <div style="display:flex;justify-content:space-between;">
+                                        <span><i class="fas fa-hourglass-half"></i> Extra Time:</span>
+                                        <strong>${data.traffic.extra_time}</strong>
+                                    </div>
+                                </div>
+                                <div style="font-size:11px;color:#adb5bd;text-align:center;">
+                                    <i class="far fa-clock"></i> Updated: ${new Date().toLocaleTimeString()}
+                                </div>
+                            </div>
+                        </div>
+                    `).openPopup();
+                    
+                    // Center map on the selected city
+                    map.setView([city.lat, city.lng], 12);
+                    
+                    return data;
+                } else {
+                    Utils.showNotification(`Could not get traffic data: ${data.error}`, 'error');
+                    return null;
+                }
+                
+            } catch (error) {
+                console.error('Error showing city traffic:', error);
+                Utils.showNotification('Failed to load traffic data', 'error');
+                return null;
+            }
         },
         
         // Locate user
         locateUser: function() {
             console.log("📍 Locating user...");
             
-            if (typeof App.updateLocationStatus === 'function') {
-                App.updateLocationStatus('Detecting your location...', 'info');
-            }
-            
             if (!navigator.geolocation) {
-                if (typeof App.updateLocationStatus === 'function') {
-                    App.updateLocationStatus('Geolocation not supported by browser', 'error');
-                }
+                Utils.showNotification('Geolocation not supported', 'error');
                 return;
             }
             
+            Utils.showLoading('Detecting your location...');
+            
             navigator.geolocation.getCurrentPosition(
-                // Success callback
                 (position) => {
                     userLocation = {
                         lat: position.coords.latitude,
@@ -179,51 +394,39 @@ const TrafficMap = (function() {
                     
                     console.log("✅ Location found:", userLocation);
                     
-                    if (typeof App.updateLocationStatus === 'function') {
-                        App.updateLocationStatus('Location detected successfully', 'success');
+                    this.updateUserLocationMarker();
+                    Utils.showNotification('Location detected successfully!', 'success');
+                    
+                    // Enable ETA button
+                    const etaBtn = document.getElementById('calculateETA');
+                    if (etaBtn) {
+                        etaBtn.disabled = false;
+                        etaBtn.innerHTML = '<i class="fas fa-route"></i> Calculate ETA';
                     }
                     
-                    this.zoomToUserLocation();
-                    this.findNearestCity();
+                    Utils.hideLoading();
                 },
-                // Error callback
                 (error) => {
                     console.error("❌ Geolocation error:", error);
-                    let message = 'Location detection failed. ';
                     
-                    switch(error.code) {
-                        case error.PERMISSION_DENIED:
-                            message += 'Please enable location permissions.';
-                            break;
-                        case error.POSITION_UNAVAILABLE:
-                            message += 'Location information unavailable.';
-                            break;
-                        case error.TIMEOUT:
-                            message += 'Location request timed out.';
-                            break;
-                        default:
-                            message += 'Unknown error.';
+                    let message = 'Could not detect location. ';
+                    if (error.code === error.PERMISSION_DENIED) {
+                        message += 'Please enable location permissions.';
+                    } else {
+                        message += 'Using Tunis as default.';
+                        userLocation = { lat: 36.8065, lng: 10.1815 };
+                        this.updateUserLocationMarker();
                     }
                     
-                    if (typeof App.updateLocationStatus === 'function') {
-                        App.updateLocationStatus(message, 'error');
-                    }
-                    
-                    // Default to Tunis
-                    userLocation = { lat: 36.8065, lng: 10.1815 };
-                    this.zoomToUserLocation();
+                    Utils.showNotification(message, 'warning');
+                    Utils.hideLoading();
                 },
-                // Options
-                {
-                    enableHighAccuracy: true,
-                    timeout: 10000,
-                    maximumAge: 0
-                }
+                { enableHighAccuracy: true, timeout: 10000 }
             );
         },
         
-        // Zoom to user location
-        zoomToUserLocation: function() {
+        // Update user location marker
+        updateUserLocationMarker: function() {
             if (!userLocation || !map) return;
             
             // Remove old marker
@@ -231,187 +434,185 @@ const TrafficMap = (function() {
                 map.removeLayer(userMarker);
             }
             
-            // Use native Leaflet icon (userIcon) for sharper rendering
-            userMarker = L.marker([userLocation.lat, userLocation.lng], {
-                icon: userIcon || undefined
-            }).addTo(map);
-            
-            // Add popup
-            userMarker.bindPopup(`
-                <div style="padding: 12px; min-width: 200px;">
-                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                        <i class="fas fa-location-dot" style="color: #007bff; font-size: 16px;"></i>
-                        <strong style="color: #2c3e50;">Your Location</strong>
+            // Create user icon
+            const userIcon = L.divIcon({
+                html: `
+                    <div style="
+                        background-color: #007bff;
+                        width: 40px;
+                        height: 40px;
+                        border-radius: 50%;
+                        border: 3px solid white;
+                        box-shadow: 0 2px 10px rgba(0,123,255,0.3);
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    ">
+                        <i class="fas fa-user" style="color: white; font-size: 16px;"></i>
                     </div>
-                    <div style="font-size: 12px; color: #6c757d;">
-                        <div>Latitude: ${userLocation.lat.toFixed(6)}</div>
-                        <div>Longitude: ${userLocation.lng.toFixed(6)}</div>
-                        ${userLocation.accuracy ? `<div>Accuracy: ±${Math.round(userLocation.accuracy)} meters</div>` : ''}
-                    </div>
-                </div>
-            `).openPopup();
-            
-            // Zoom to location
-            const zoomLevel = userLocation.accuracy > 1000 ? 11 : 14;
-            map.setView([userLocation.lat, userLocation.lng], zoomLevel);
-        },
-        
-        // Find nearest Tunisian city
-        findNearestCity: function() {
-            if (!userLocation) return null;
-            
-            let nearestCity = null;
-            let minDistance = Infinity;
-            
-            Object.entries(tunisiaCities).forEach(([id, city]) => {
-                const distance = this.calculateDistance(userLocation.lat, userLocation.lng, city.lat, city.lng);
-                if (distance < minDistance) {
-                    minDistance = distance;
-                    nearestCity = { id: parseInt(id), ...city };
-                }
+                `,
+                iconSize: [40, 40],
+                iconAnchor: [20, 40],
+                className: 'user-marker'
             });
             
-            if (nearestCity) {
-                console.log(`📍 Nearest city: ${nearestCity.name} (${minDistance.toFixed(1)} km)`);
-                return nearestCity;
-            }
-            
-            return null;
-        },
-        
-        // Calculate distance between coordinates
-        calculateDistance: function(lat1, lon1, lat2, lon2) {
-            const R = 6371; // Earth radius in km
-            const dLat = (lat2 - lat1) * Math.PI / 180;
-            const dLon = (lon2 - lon1) * Math.PI / 180;
-            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                      Math.sin(dLon/2) * Math.sin(dLon/2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-            return R * c;
-        },
-        
-        // Update traffic marker on map
-        updateTrafficMarker: function(cityId, trafficLevel) {
-            if (!map) return;
-            
-            const city = tunisiaCities[cityId];
-            if (!city) return;
-            
-            // Remove old marker
-            if (currentTrafficMarker) {
-                map.removeLayer(currentTrafficMarker);
-            }
-            
-            // Create traffic prediction marker
-            const trafficIcons = {
-                0: L.divIcon({
-                    html: `
-                        <div style="
-                            background-color: #28a745;
-                            width: 30px;
-                            height: 30px;
-                            border-radius: 50%;
-                            border: 3px solid white;
-                            box-shadow: 0 0 10px rgba(40,167,69,0.5);
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                        ">
-                            <i class="fas fa-check" style="color: white; font-size: 12px;"></i>
-                        </div>
-                    `,
-                    iconSize: [30, 30],
-                    iconAnchor: [15, 15],
-                    className: 'traffic-marker'
-                }),
-                1: L.divIcon({
-                    html: `
-                        <div style="
-                            background-color: #ffc107;
-                            width: 35px;
-                            height: 35px;
-                            border-radius: 50%;
-                            border: 3px solid white;
-                            box-shadow: 0 0 10px rgba(255,193,7,0.5);
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                        ">
-                            <i class="fas fa-exclamation" style="color: #856404; font-size: 14px;"></i>
-                        </div>
-                    `,
-                    iconSize: [35, 35],
-                    iconAnchor: [17.5, 17.5],
-                    className: 'traffic-marker'
-                }),
-                2: L.divIcon({
-                    html: `
-                        <div style="
-                            background-color: #dc3545;
-                            width: 40px;
-                            height: 40px;
-                            border-radius: 50%;
-                            border: 3px solid white;
-                            box-shadow: 0 0 15px rgba(220,53,69,0.6);
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            animation: pulse 2s infinite;
-                        ">
-                            <i class="fas fa-exclamation-triangle" style="color: white; font-size: 16px;"></i>
-                        </div>
-                    `,
-                    iconSize: [40, 40],
-                    iconAnchor: [20, 20],
-                    className: 'traffic-marker traffic-high'
-                })
-            };
-            
-            currentTrafficMarker = L.marker([city.lat, city.lng], {
-                icon: trafficIcons[trafficLevel] || trafficIcons[0]
+            // Add marker to map
+            userMarker = L.marker([userLocation.lat, userLocation.lng], {
+                icon: userIcon,
+                title: 'Your Location'
             }).addTo(map);
             
-            // Add popup
-            const trafficLabels = { 0: 'Low', 1: 'Medium', 2: 'High' };
-            const trafficMessages = {
-                0: 'Traffic is flowing smoothly',
-                1: 'Moderate traffic expected',
-                2: 'Heavy traffic detected'
-            };
-            
-            currentTrafficMarker.bindPopup(`
-                <div style="padding: 15px; min-width: 220px;">
-                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
-                        <div style="
-                            background: ${trafficColors[trafficLevel]};
-                            width: 20px;
-                            height: 20px;
-                            border-radius: 50%;
-                            border: 2px solid white;
-                            box-shadow: 0 0 5px ${trafficColors[trafficLevel]};
-                        "></div>
-                        <strong style="color: #2c3e50; font-size: 16px;">${city.name} Traffic</strong>
+            userMarker.bindPopup(`
+                <div style="min-width:200px;">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                        <i class="fas fa-user-circle" style="color:#007bff;font-size:16px;"></i>
+                        <strong style="color:#2c3e50;">Your Location</strong>
                     </div>
-                    <div style="margin-bottom: 10px;">
-                        <div style="font-weight: 600; color: ${trafficColors[trafficLevel]};">
-                            ${trafficLabels[trafficLevel] || 'Unknown'} Traffic
-                        </div>
-                        <div style="font-size: 13px; color: #6c757d;">
-                            ${trafficMessages[trafficLevel] || 'No traffic data available'}
-                        </div>
-                    </div>
-                    <div style="font-size: 12px; color: #adb5bd; border-top: 1px solid #e9ecef; padding-top: 8px;">
-                        <i class="far fa-clock"></i> Updated: ${new Date().toLocaleTimeString()}
+                    <div style="font-size:12px;color:#6c757d;">
+                        <div><i class="fas fa-map-pin"></i> Lat: ${userLocation.lat.toFixed(6)}</div>
+                        <div><i class="fas fa-map-pin"></i> Lng: ${userLocation.lng.toFixed(6)}</div>
+                        ${userLocation.accuracy ? `<div><i class="fas fa-crosshairs"></i> Accuracy: ±${Math.round(userLocation.accuracy)}m</div>` : ''}
+                        <div><i class="far fa-clock"></i> ${new Date().toLocaleTimeString()}</div>
                     </div>
                 </div>
-            `).openPopup();
+            `);
             
-            // Center map on the predicted city
-            map.setView([city.lat, city.lng], city.zoom || 12);
+            // Zoom to location
+            map.setView([userLocation.lat, userLocation.lng], 13);
         },
         
-        // Zoom to Tunisia view
+        // Calculate ETA
+        calculateETA: async function(cityId) {
+            if (!userLocation) {
+                Utils.showNotification('Please detect your location first', 'warning');
+                return null;
+            }
+            
+            const city = window.appData?.cities?.[cityId];
+            if (!city) {
+                Utils.showNotification('City not found', 'error');
+                return null;
+            }
+            
+            Utils.showLoading('Calculating route with traffic conditions...');
+            
+            try {
+                const hour = parseInt(document.getElementById('hour').value) || new Date().getHours();
+                const day = parseInt(document.getElementById('day').value) || new Date().getDay();
+                const dayIndex = day === 0 ? 6 : day - 1;
+                const weather = parseInt(document.getElementById('weather').value) || 0;
+                
+                const response = await fetch('/api/calculate-eta', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        origin: userLocation,
+                        city_id: parseInt(cityId),
+                        hour: hour,
+                        day: dayIndex,
+                        weather: weather
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Draw route on map
+                    this.drawRoute(data.route, data.city);
+                    
+                    Utils.showNotification(`ETA: ${data.eta.total_travel_time}`, 'success');
+                    return data;
+                } else {
+                    Utils.showNotification(`ETA calculation failed: ${data.error}`, 'error');
+                    return null;
+                }
+                
+            } catch (error) {
+                console.error('ETA calculation error:', error);
+                Utils.showNotification('Failed to calculate ETA', 'error');
+                return null;
+            } finally {
+                Utils.hideLoading();
+            }
+        },
+        
+        // Draw route on map
+        drawRoute: function(routeData, city) {
+            if (!map) return;
+            
+            // Clear previous route
+            this.clearRoute();
+            
+            // Draw route line if coordinates available
+            if (routeData.coordinates && routeData.coordinates.length > 0) {
+                routeLayer = L.polyline(routeData.coordinates, {
+                    color: '#007bff',
+                    weight: 5,
+                    opacity: 0.7,
+                    lineCap: 'round'
+                }).addTo(map);
+                
+                // Add destination marker
+                destinationMarker = L.marker([city.lat, city.lng], {
+                    icon: L.divIcon({
+                        html: `
+                            <div style="
+                                background-color: #6f42c1;
+                                width: 40px;
+                                height: 40px;
+                                border-radius: 50%;
+                                border: 3px solid white;
+                                box-shadow: 0 2px 10px rgba(111,66,193,0.3);
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                            ">
+                                <i class="fas fa-flag-checkered" style="color: white; font-size: 16px;"></i>
+                            </div>
+                        `,
+                        iconSize: [40, 40],
+                        iconAnchor: [20, 40]
+                    }),
+                    title: `Destination: ${city.name}`
+                }).addTo(map);
+                
+                destinationMarker.bindPopup(`
+                    <div style="min-width:200px;">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                            <i class="fas fa-flag-checkered" style="color:#6f42c1;font-size:16px;"></i>
+                            <strong style="color:#2c3e50;">Destination</strong>
+                        </div>
+                        <div style="font-size:12px;color:#6c757d;">
+                            <div><strong>${city.name}</strong></div>
+                            <div>${city.governorate || 'Unknown'} Governorate</div>
+                            <div style="margin-top:8px;padding-top:8px;border-top:1px solid #e9ecef;">
+                                <div><i class="fas fa-road"></i> Distance: ${routeData.distance?.text || 'Calculating...'}</div>
+                                <div><i class="fas fa-clock"></i> Travel Time: ${routeData.adjusted_duration?.text || 'Calculating...'}</div>
+                            </div>
+                        </div>
+                    </div>
+                `);
+                
+                // Fit bounds to show entire route
+                const bounds = L.latLngBounds(routeData.coordinates);
+                if (userMarker) bounds.extend(userMarker.getLatLng());
+                map.fitBounds(bounds.pad(0.1));
+            }
+        },
+        
+        // Clear route
+        clearRoute: function() {
+            if (routeLayer) {
+                map.removeLayer(routeLayer);
+                routeLayer = null;
+            }
+            if (destinationMarker) {
+                map.removeLayer(destinationMarker);
+                destinationMarker = null;
+            }
+        },
+        
+        // Zoom to Tunisia
         zoomToTunisia: function() {
             if (map) {
                 map.setView([34.0, 9.0], 7);
@@ -419,27 +620,16 @@ const TrafficMap = (function() {
             }
         },
         
-        // Get city data
-        getCityData: function(cityId) {
-            return tunisiaCities[cityId];
+        // Get user location
+        getUserLocation: function() {
+            return userLocation;
         },
         
-        // Get all cities
-        getAllCities: function() {
-            return tunisiaCities;
-        },
-        
-        // Get traffic colors
-        getTrafficColors: function() {
-            return trafficColors;
-        },
-        
-        // Check if map is initialized
-        isInitialized: function() {
-            return mapInitialized;
+        // Get traffic for city (public method)
+        getCityTraffic: function(cityId) {
+            return this.showCityTraffic(cityId);
         }
     };
 })();
 
-// Make map functions globally available
 window.TrafficMap = TrafficMap;

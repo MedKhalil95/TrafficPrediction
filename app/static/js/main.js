@@ -1,18 +1,21 @@
-// main.js - Main application logic for Tunisian Traffic Prediction System
-
+// main.js - Enhanced version
 const App = (function() {
     // Private variables
-    let tunisiaCities = {};
-    let currentPrediction = null;
+    let currentCityId = null;
+    let currentCityData = null;
+    let currentTrafficData = null;
     
     // Public methods
     return {
         // Initialize application
         init: function() {
-            console.log("🚀 Initializing application...");
+            console.log("🚀 Initializing enhanced traffic system...");
             
             // Get data from window object
-            tunisiaCities = window.appData?.cities || {};
+            window.appData = window.appData || {
+                cities: {},
+                governorates: {}
+            };
             
             // Initialize components
             this.initClock();
@@ -25,12 +28,6 @@ const App = (function() {
                     TrafficMap.init();
                 }
                 
-                // Check system status
-                this.checkSystemStatus();
-                
-                // Auto-refresh status every 5 minutes
-                setInterval(() => this.checkSystemStatus(), 300000);
-                
                 console.log("✅ Application initialized successfully");
             }, 500);
         },
@@ -39,13 +36,23 @@ const App = (function() {
         initClock: function() {
             const updateClock = () => {
                 const now = new Date();
+                const timeString = now.toLocaleTimeString('en-TN', {
+                    hour12: false,
+                    timeZone: 'Africa/Tunis'
+                });
+                const dateString = now.toLocaleDateString('en-TN', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    timeZone: 'Africa/Tunis'
+                });
                 
-                // Update clock display
                 const clockElement = document.getElementById('realTimeClock');
                 if (clockElement) {
                     clockElement.innerHTML = `
-                        <div class="clock-time">${Utils.formatTime(now)}</div>
-                        <div class="clock-date">${Utils.formatDate(now)}</div>
+                        <div class="clock-time">${timeString}</div>
+                        <div class="clock-date">${dateString}</div>
                     `;
                 }
                 
@@ -58,90 +65,103 @@ const App = (function() {
                         day: 'numeric',
                         timeZone: 'Africa/Tunis'
                     });
-                    const shortTime = Utils.formatTime(now);
-                    footerTime.textContent = `Last updated: ${shortDate} ${shortTime}`;
+                    footerTime.textContent = `${shortDate} ${timeString}`;
                 }
             };
             
-            // Initial update
             updateClock();
-            
-            // Update every second
             setInterval(updateClock, 1000);
         },
         
         // Initialize form
         initForm: function() {
-            // Set current time in form
             this.updateFormWithCurrentTime();
-            
-            // Initialize city hotspots
-            this.updateCityHotspots();
         },
         
         // Initialize event listeners
         initEventListeners: function() {
-            // Hour slider change
+            // Hour slider
             const hourSlider = document.getElementById('hour');
             if (hourSlider) {
                 hourSlider.addEventListener('input', (e) => {
                     this.updateHourDisplay(e.target.value);
                 });
+                this.updateHourDisplay(hourSlider.value);
             }
             
-            // City select change
+            // City select - with debouncing
             const citySelect = document.getElementById('city');
             if (citySelect) {
-                citySelect.addEventListener('change', () => {
-                    this.updateCityHotspots();
+                citySelect.addEventListener('change', (e) => {
+                    const cityId = e.target.value;
+                    if (cityId) {
+                        this.handleCitySelection(cityId);
+                    } else {
+                        this.clearCitySelection();
+                    }
                 });
             }
             
-            // Auto-submit on parameter changes
-            const debouncedSubmit = Utils.debounce(() => this.submitForm(), 1000);
+            // Predict button
+            const predictBtn = document.getElementById('predictBtn');
+            if (predictBtn) {
+                predictBtn.addEventListener('click', () => {
+                    this.predictTraffic();
+                });
+            }
             
-            if (hourSlider) hourSlider.addEventListener('change', debouncedSubmit);
-            if (citySelect) citySelect.addEventListener('change', debouncedSubmit);
+            // Quick predict button
+            const quickPredictBtn = document.getElementById('quickPredictBtn');
+            if (quickPredictBtn) {
+                quickPredictBtn.addEventListener('click', () => {
+                    this.quickPredict();
+                });
+            }
             
-            const daySelect = document.getElementById('day');
-            const weatherSelect = document.getElementById('weather');
+            // Locate button
+            const locateBtn = document.getElementById('locateBtn');
+            if (locateBtn) {
+                locateBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.locateUser();
+                });
+            }
             
-            if (daySelect) daySelect.addEventListener('change', debouncedSubmit);
-            if (weatherSelect) weatherSelect.addEventListener('change', debouncedSubmit);
+            // Calculate ETA button
+            const etaBtn = document.getElementById('calculateETA');
+            if (etaBtn) {
+                etaBtn.addEventListener('click', () => {
+                    this.calculateETA();
+                });
+            }
         },
         
         // Update hour display
-        updateHourDisplay: function(hour) {
+        updateHourDisplay: function(hourValue) {
+            const hourSlider = document.getElementById('hour');
             const hourDisplay = document.getElementById('hourDisplay');
-            if (!hourDisplay) return;
             
-            hour = parseInt(hour);
+            if (!hourSlider || !hourDisplay) return;
+            
+            const hour = parseInt(hourValue || hourSlider.value);
             const ampm = hour >= 12 ? 'PM' : 'AM';
             const displayHour = hour % 12 || 12;
-            const emoji = Utils.getHourEmoji(hour);
+            
+            // Get appropriate emoji
+            let emoji = '🌙';
+            if (hour >= 5 && hour < 12) emoji = '🌅';
+            else if (hour >= 12 && hour < 17) emoji = '☀️';
+            else if (hour >= 17 && hour < 20) emoji = '🌇';
             
             hourDisplay.innerHTML = `${emoji} ${displayHour}:00 ${ampm}`;
-            hourDisplay.style.color = (hour >= 7 && hour <= 9) || (hour >= 16 && hour <= 18) 
-                ? '#dc3545' : '#28a745';
-        },
-        
-        // Update city hotspots
-        updateCityHotspots: function() {
-            const cityId = document.getElementById('city').value;
-            const city = tunisiaCities[cityId];
-            const hotspotsDiv = document.getElementById('cityHotspots');
             
-            if (city && hotspotsDiv) {
-                hotspotsDiv.innerHTML = '';
-                city.hotspots.forEach(hotspot => {
-                    const tag = document.createElement('span');
-                    tag.className = 'hotspot-tag';
-                    tag.innerHTML = `<i class="fas fa-traffic-light"></i> ${hotspot}`;
-                    hotspotsDiv.appendChild(tag);
-                });
-                
-                // Update city name in results
-                document.getElementById('cityName').textContent = city.name;
+            // Color coding for rush hours
+            if ((hour >= 7 && hour <= 9) || (hour >= 16 && hour <= 19)) {
+                hourDisplay.style.color = '#dc3545';
+                hourDisplay.style.fontWeight = 'bold';
+            } else {
+                hourDisplay.style.color = '#28a745';
+                hourDisplay.style.fontWeight = 'normal';
             }
         },
         
@@ -156,8 +176,7 @@ const App = (function() {
             
             // Update hour slider
             const hourSlider = document.getElementById('hour');
-            const hourDisplay = document.getElementById('hourDisplay');
-            if (hourSlider && hourDisplay) {
+            if (hourSlider) {
                 hourSlider.value = currentHour;
                 this.updateHourDisplay(currentHour);
             }
@@ -167,260 +186,258 @@ const App = (function() {
             if (daySelector) {
                 daySelector.value = systemDay;
             }
-            
-            // Update prediction time display
-            this.updatePredictionTimeDisplay(currentHour, systemDay);
         },
         
-        // Update prediction time display
-        updatePredictionTimeDisplay: function(hour, day) {
-            const predictionTimeElement = document.getElementById('predictionTime');
-            if (!predictionTimeElement) return;
+        // Handle city selection
+        handleCitySelection: async function(cityId) {
+            currentCityId = cityId;
+            const city = window.appData?.cities?.[cityId];
             
-            const ampm = hour >= 12 ? 'PM' : 'AM';
-            const displayHour = hour % 12 || 12;
-            const dayName = Utils.getDayName(day);
-            
-            predictionTimeElement.textContent = `${displayHour}:00 ${ampm} - ${dayName}`;
-        },
-        
-        // Submit form for prediction
-        submitForm: async function() {
-            // Get form data
-            const formData = {
-                hour: parseInt(document.getElementById('hour').value),
-                day: parseInt(document.getElementById('day').value),
-                city: parseInt(document.getElementById('city').value),
-                weather: parseInt(document.getElementById('weather').value)
-            };
-            
-            // Validate form
-            const errors = Utils.validateForm(formData);
-            if (errors.length > 0) {
-                Utils.showNotification(errors[0], 'error');
+            if (!city) {
+                this.clearCitySelection();
                 return;
             }
             
-            // Update UI immediately
-            const cityName = tunisiaCities[formData.city]?.name || 'Unknown';
-            document.getElementById('cityName').textContent = cityName;
+            currentCityData = city;
             
-            const ampm = formData.hour >= 12 ? 'PM' : 'AM';
-            const displayHour = formData.hour % 12 || 12;
-            const dayName = Utils.getDayName(formData.day);
-            document.getElementById('predictionTime').textContent = `${displayHour}:00 ${ampm} - ${dayName}`;
-            
-            // Show loading
-            const submitBtn = document.getElementById('submitBtn');
-            const originalText = submitBtn.innerHTML;
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Predicting...';
-            submitBtn.disabled = true;
-            
-            Utils.showLoading('Analyzing traffic patterns...');
+            // Show loading for city data
+            Utils.showLoading('Loading city traffic data...');
             
             try {
-                // Send prediction request
+                // Show city on map with traffic data
+                if (typeof TrafficMap !== 'undefined' && TrafficMap.getCityTraffic) {
+                    const trafficData = await TrafficMap.getCityTraffic(cityId);
+                    
+                    if (trafficData) {
+                        currentTrafficData = trafficData;
+                        this.updateCityInfoDisplay(city, trafficData);
+                        Utils.showNotification(`${city.name} traffic data loaded`, 'success');
+                    }
+                } else {
+                    // Fallback: just show basic city info
+                    this.updateCityInfoDisplay(city, null);
+                }
+                
+                // Enable ETA button if location available
+                const etaBtn = document.getElementById('calculateETA');
+                if (etaBtn) {
+                    if (TrafficMap.getUserLocation && TrafficMap.getUserLocation()) {
+                        etaBtn.disabled = false;
+                    } else {
+                        etaBtn.disabled = true;
+                        etaBtn.title = 'Please detect your location first';
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Error loading city data:', error);
+                this.updateCityInfoDisplay(city, null);
+                Utils.showNotification('Could not load detailed traffic data', 'warning');
+            } finally {
+                Utils.hideLoading();
+            }
+        },
+        
+        // Clear city selection
+        clearCitySelection: function() {
+            currentCityId = null;
+            currentCityData = null;
+            currentTrafficData = null;
+            
+            // Hide city info card
+            const selectedCityInfo = document.getElementById('selectedCityInfo');
+            if (selectedCityInfo) {
+                selectedCityInfo.style.display = 'none';
+            }
+            
+            // Clear traffic level
+            const trafficLevel = document.getElementById('trafficLevel');
+            if (trafficLevel) {
+                trafficLevel.textContent = '-';
+                trafficLevel.className = 'traffic-level';
+            }
+            
+            // Reset traffic message
+            const trafficMessage = document.getElementById('trafficMessage');
+            if (trafficMessage) {
+                trafficMessage.textContent = 'Select a city to see traffic information';
+                trafficMessage.style.color = '';
+            }
+            
+            // Hide ETA display
+            const etaDisplay = document.getElementById('etaDisplay');
+            if (etaDisplay) {
+                etaDisplay.innerHTML = '';
+            }
+            
+            // Disable ETA button
+            const etaBtn = document.getElementById('calculateETA');
+            if (etaBtn) {
+                etaBtn.disabled = true;
+            }
+            
+            // Clear map markers (if TrafficMap available)
+            if (typeof TrafficMap !== 'undefined') {
+                // Clear selected city marker
+                // Note: We don't clear all cities here, just the selected one
+            }
+        },
+        
+        // Update city info display
+        updateCityInfoDisplay: function(city, trafficData) {
+            // Show city info card
+            const selectedCityInfo = document.getElementById('selectedCityInfo');
+            if (selectedCityInfo) {
+                selectedCityInfo.style.display = 'block';
+                
+                // Update city details
+                const cityDetails = document.getElementById('cityDetails');
+                if (cityDetails) {
+                    let trafficInfo = '';
+                    if (trafficData && trafficData.traffic) {
+                        const traffic = trafficData.traffic;
+                        trafficInfo = `
+                            <div style="margin-top:10px;padding:10px;background:${traffic.color}10;border-radius:5px;border-left:4px solid ${traffic.color};">
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+                                    <strong style="color:${traffic.color};">${traffic.level_text} Traffic</strong>
+                                    <span style="font-size:12px;">${traffic.speed}</span>
+                                </div>
+                                <div style="font-size:12px;color:#666;">
+                                    <div>Condition: ${traffic.congestion}</div>
+                                    <div>Extra Time: ${traffic.extra_time}</div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                    
+                    cityDetails.innerHTML = `
+                        <div class="city-card">
+                            <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:10px;">
+                                <h5 style="margin:0;">${city.name}</h5>
+                                <span style="font-size:12px;color:#6c757d;background:#f8f9fa;padding:2px 8px;border-radius:10px;">
+                                    ${city.governorate || 'Unknown'}
+                                </span>
+                            </div>
+                            <div class="city-info-grid">
+                                <div>
+                                    <i class="fas fa-users"></i>
+                                    <span>Population:</span>
+                                </div>
+                                <div>${city.population ? city.population.toLocaleString() : 'N/A'}</div>
+                                
+                                <div>
+                                    <i class="fas fa-map-pin"></i>
+                                    <span>Coordinates:</span>
+                                </div>
+                                <div>${city.lat.toFixed(4)}, ${city.lng.toFixed(4)}</div>
+                            </div>
+                            ${trafficInfo}
+                        </div>
+                    `;
+                }
+            }
+            
+            // Update traffic level badge
+            const trafficLevel = document.getElementById('trafficLevel');
+            if (trafficLevel && trafficData && trafficData.traffic) {
+                const traffic = trafficData.traffic;
+                trafficLevel.textContent = traffic.level_text;
+                trafficLevel.className = `traffic-level traffic-${traffic.level_text.toLowerCase()}`;
+                trafficLevel.innerHTML = `
+                    <i class="fas fa-traffic-light"></i> ${traffic.level_text}
+                `;
+            }
+            
+            // Update traffic message
+            const trafficMessage = document.getElementById('trafficMessage');
+            if (trafficMessage && trafficData && trafficData.traffic) {
+                const traffic = trafficData.traffic;
+                trafficMessage.innerHTML = `
+                    <i class="fas fa-info-circle"></i> Current traffic in ${city.name}: 
+                    <strong style="color:${traffic.color}">${traffic.level_text}</strong> - 
+                    Average speed: ${traffic.speed}
+                `;
+            }
+        },
+        
+        // Predict traffic
+        predictTraffic: async function() {
+            if (!currentCityId) {
+                Utils.showNotification('Please select a city first', 'warning');
+                return;
+            }
+            
+            const hour = parseInt(document.getElementById('hour').value);
+            const day = parseInt(document.getElementById('day').value);
+            const weather = parseInt(document.getElementById('weather').value);
+            
+            Utils.showLoading('Predicting traffic patterns...');
+            
+            try {
                 const response = await fetch('/api/traffic-prediction', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(formData)
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ hour, day, city: currentCityId, weather })
                 });
                 
                 const data = await response.json();
                 
                 if (data.success) {
-                    // Update prediction results
                     this.updatePredictionResults(data);
-                    currentPrediction = data;
-                    
-                    // Show success notification
-                    Utils.showNotification(`✅ Traffic prediction successful! Level: ${data.traffic_level.level}`, 'success');
+                    Utils.showNotification('Traffic prediction updated!', 'success');
                 } else {
-                    // Use fallback prediction
-                    const fallbackData = this.getFallbackPrediction(formData);
-                    this.updatePredictionResults(fallbackData);
-                    currentPrediction = fallbackData;
-                    Utils.showNotification('⚠️ Using estimated prediction', 'warning');
+                    Utils.showNotification(`Prediction failed: ${data.error}`, 'error');
                 }
             } catch (error) {
-                console.error('Error:', error);
-                // Use fallback prediction
-                const fallbackData = this.getFallbackPrediction(formData);
-                this.updatePredictionResults(fallbackData);
-                currentPrediction = fallbackData;
-                Utils.showNotification('ℹ️ Using offline prediction', 'info');
+                console.error('Prediction error:', error);
+                Utils.showNotification('Failed to get prediction', 'error');
             } finally {
-                // Reset button
-                submitBtn.innerHTML = originalText;
-                submitBtn.disabled = false;
-                
-                // Hide loading overlay
                 Utils.hideLoading();
             }
         },
         
-        // Update prediction results display
+        // Update prediction results
         updatePredictionResults: function(data) {
-            console.log("Updating prediction results:", data);
-            
             // Update traffic level
-            const trafficElement = document.getElementById('trafficLevel');
-            if (trafficElement && data.traffic_level) {
-                const level = data.traffic_level.level.toLowerCase();
-                trafficElement.textContent = data.traffic_level.level;
-                trafficElement.className = 'traffic-level ' + level;
-                
-                // Add appropriate icon
-                const icons = { low: '✅', medium: '⚠️', high: '🚨' };
-                trafficElement.innerHTML = `${icons[level] || '📊'} ${data.traffic_level.level}`;
+            const trafficLevel = document.getElementById('trafficLevel');
+            if (trafficLevel && data.traffic_level) {
+                trafficLevel.textContent = data.traffic_level.level;
+                trafficLevel.className = `traffic-level traffic-${data.traffic_level.level.toLowerCase()}`;
+                trafficLevel.innerHTML = `${data.traffic_level.emoji} ${data.traffic_level.level}`;
             }
             
             // Update traffic message
-            const messageElement = document.getElementById('trafficMessage');
-            if (messageElement && data.traffic_level) {
-                messageElement.textContent = data.traffic_level.message;
-                messageElement.style.color = data.traffic_level.color;
+            const trafficMessage = document.getElementById('trafficMessage');
+            if (trafficMessage && data.traffic_level) {
+                const cityName = data.city?.name || 'Selected City';
+                trafficMessage.innerHTML = `
+                    <i class="fas fa-prediction"></i> Predicted traffic for ${hour}:00 - 
+                    <strong style="color:${data.traffic_level.color}">${data.traffic_level.level}</strong> conditions
+                `;
             }
             
-            // Update city name (if not already set)
-            const cityNameElement = document.getElementById('cityName');
-            if (cityNameElement && data.city) {
-                cityNameElement.textContent = data.city.name;
-            }
-            
-            // Update traffic load
-            const trafficLoadElement = document.getElementById('trafficLoad');
-            if (trafficLoadElement) {
-                trafficLoadElement.textContent = Utils.getTrafficLoad(data.prediction);
-            }
-            
-            // Update advisory
-            const advisoryElement = document.getElementById('advisory');
-            if (advisoryElement) {
-                advisoryElement.textContent = Utils.getTravelAdvisory(data.prediction);
-                advisoryElement.style.color = data.traffic_level?.color || '#28a745';
-            }
-            
-            // Update recommendations
-            const recommendationsList = document.getElementById('recommendationsList');
-            if (recommendationsList && data.recommendations) {
-                recommendationsList.innerHTML = '';
-                data.recommendations.forEach(rec => {
-                    const li = document.createElement('li');
-                    li.textContent = rec;
-                    recommendationsList.appendChild(li);
-                });
-            }
-            
-            // Update map with traffic marker
-            if (data.city && typeof TrafficMap !== 'undefined') {
-                TrafficMap.updateTrafficMarker(data.city.id || formData.city, data.prediction);
+            // Show recommendations if available
+            if (data.recommendations && data.recommendations.length > 0) {
+                const recommendationsSection = document.getElementById('recommendationsSection');
+                const recommendationsList = document.getElementById('recommendationsList');
+                
+                if (recommendationsSection && recommendationsList) {
+                    recommendationsSection.style.display = 'block';
+                    recommendationsList.innerHTML = '';
+                    
+                    data.recommendations.forEach(rec => {
+                        const li = document.createElement('li');
+                        li.innerHTML = rec;
+                        recommendationsList.appendChild(li);
+                    });
+                }
             }
         },
         
-        // Fallback prediction logic
-        getFallbackPrediction: function(formData) {
-            const { hour, day, city, weather } = formData;
-            
-            // Calculate traffic score
-            let score = 0;
-            
-            // Time factor
-            if (hour >= 7 && hour <= 9) score += 2;
-            if (hour >= 16 && hour <= 19) score += 2.5;
-            if (hour >= 12 && hour <= 14) score += 1;
-            
-            // Day factor
-            if (day === 4) score += 1;
-            if (day >= 5) score -= 0.5;
-            
-            // City factor
-            if (city === 0) score += 1;
-            if (city === 1) score += 0.5;
-            
-            // Weather factor
-            if (weather === 1) score += 1;
-            if (weather === 2) score += 0.5;
-            
-            // Determine traffic level
-            let prediction, level;
-            if (score >= 3.5) {
-                prediction = 2;
-                level = "High";
-            } else if (score >= 1.5) {
-                prediction = 1;
-                level = "Medium";
-            } else {
-                prediction = 0;
-                level = "Low";
-            }
-            
-            // Get city info
-            const cityInfo = tunisiaCities[city] || tunisiaCities[0];
-            
-            // Generate recommendations
-            const recommendations = [];
-            if (prediction === 2) {
-                recommendations.push("🚗 Consider using public transportation");
-                recommendations.push("⏰ Allow extra travel time");
-                if (hour >= 7 && hour <= 9) recommendations.push("🕒 Avoid morning rush hours if possible");
-            } else if (prediction === 1) {
-                recommendations.push("🚘 Normal travel time expected");
-                recommendations.push("📱 Check real-time traffic updates");
-            } else {
-                recommendations.push("✅ Smooth driving conditions");
-                recommendations.push("⏱️ Normal travel time");
-            }
-            
-            return {
-                prediction: prediction,
-                traffic_level: {
-                    level: level,
-                    color: prediction === 0 ? '#28a745' : prediction === 1 ? '#ffc107' : '#dc3545',
-                    message: prediction === 0 ? 'Traffic is light' : 
-                             prediction === 1 ? 'Moderate traffic expected' : 
-                             'Heavy traffic - consider alternate routes'
-                },
-                city: cityInfo,
-                recommendations: recommendations
-            };
-        },
-        
-        // Quick predict using current time
+        // Quick predict
         quickPredict: function() {
-            Utils.showLoading('Predicting traffic for current time...');
-            
-            try {
-                // Update form with current time
-                this.updateFormWithCurrentTime();
-                
-                // Submit the form
-                this.submitForm();
-                
-                Utils.hideLoading();
-            } catch (error) {
-                Utils.hideLoading();
-                Utils.showNotification('Error making prediction', 'error');
-            }
-        },
-        
-        // Update location status
-        updateLocationStatus: function(status, type = 'info') {
-            const statusEl = document.getElementById('locationStatus');
-            if (!statusEl) return;
-            
-            const icons = {
-                success: 'fas fa-check-circle',
-                error: 'fas fa-exclamation-circle',
-                warning: 'fas fa-exclamation-triangle',
-                info: 'fas fa-spinner fa-spin'
-            };
-            
-            statusEl.innerHTML = `
-                <i class="${icons[type] || 'fas fa-info-circle'}"></i> ${status}
-            `;
+            this.updateFormWithCurrentTime();
+            setTimeout(() => this.predictTraffic(), 100);
         },
         
         // Locate user
@@ -430,83 +447,99 @@ const App = (function() {
             }
         },
         
-        // Check system status
-        checkSystemStatus: async function() {
-            try {
-                const response = await fetch('/api/system-status');
-                const data = await response.json();
-                
-                if (data.success) {
-                    // Update status displays
-                    const lastUpdate = data.status.last_update;
-                    if (lastUpdate && lastUpdate !== 'Never') {
-                        const date = new Date(lastUpdate);
-                        document.getElementById('lastUpdateTime').textContent = 
-                            `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
-                    } else {
-                        document.getElementById('lastUpdateTime').textContent = 'Never';
-                    }
-                    
-                    document.getElementById('nextUpdateTime').textContent = 
-                        data.status.next_update || 'Unknown';
-                    
-                    document.getElementById('dataRecords').textContent = 
-                        data.status.dataset_size?.toLocaleString() || '0';
-                    
-                    // Update model status with better styling
-                    const modelStatus = document.getElementById('modelStatus');
-                    if (data.files?.model?.exists) {
-                        modelStatus.className = 'status-value status-ok';
-                        modelStatus.innerHTML = '<i class="fas fa-check-circle"></i> Active';
-                    } else {
-                        modelStatus.className = 'status-value status-warning';
-                        modelStatus.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Fallback';
-                    }
-                    
-                    Utils.showNotification('System status updated successfully', 'success');
-                }
-            } catch (error) {
-                console.error('Error checking system status:', error);
-                Utils.showNotification('Failed to check system status', 'error');
+        // Calculate ETA
+        calculateETA: async function() {
+            if (!currentCityId) {
+                Utils.showNotification('Please select a city first', 'warning');
+                return;
             }
-        },
-        
-        // Force update
-        forceUpdate: async function() {
-            const btn = event.target;
-            const originalText = btn.innerHTML;
             
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating...';
-            btn.disabled = true;
-            
-            try {
-                const response = await fetch('/api/force-update', { method: 'POST' });
-                const data = await response.json();
-                
-                if (data.success) {
-                    Utils.showNotification('✅ Data update completed successfully!', 'success');
-                    this.checkSystemStatus();
-                } else {
-                    Utils.showNotification('❌ Update failed: ' + data.error, 'error');
-                }
-            } catch (error) {
-                Utils.showNotification('❌ Update failed: ' + error.message, 'error');
-            } finally {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-            }
-        },
-        
-        // Zoom to Tunisia view
-        zoomToTunisia: function() {
             if (typeof TrafficMap !== 'undefined') {
-                TrafficMap.zoomToTunisia();
+                const result = await TrafficMap.calculateETA(currentCityId);
+                
+                if (result) {
+                    this.updateETADisplay(result);
+                    
+                    const city = window.appData?.cities?.[currentCityId];
+                    if (city) {
+                        Utils.showNotification(`ETA to ${city.name}: ${result.eta.total_travel_time}`, 'success');
+                    }
+                }
+            } else {
+                Utils.showNotification('Map functionality not available', 'error');
             }
         },
         
-        // Get current prediction
-        getCurrentPrediction: function() {
-            return currentPrediction;
+        // Update ETA display
+        updateETADisplay: function(data) {
+            const etaSection = document.getElementById('etaDisplay');
+            if (!etaSection) return;
+            
+            const trafficLevel = data.traffic.level_text ? data.traffic.level_text.toLowerCase() : 'unknown';
+            
+            etaSection.innerHTML = `
+                <div class="eta-card">
+                    <div class="eta-header">
+                        <i class="fas fa-clock"></i>
+                        <h4>Estimated Arrival Time</h4>
+                        <span class="traffic-badge traffic-${trafficLevel}">
+                            ${data.traffic.level_text} Traffic
+                        </span>
+                    </div>
+                    <div class="eta-content">
+                        <div class="eta-row">
+                            <div class="eta-label">
+                                <i class="fas fa-route"></i>
+                                <span>Distance</span>
+                            </div>
+                            <div class="eta-value">${data.eta.distance_km} km</div>
+                        </div>
+                        <div class="eta-row">
+                            <div class="eta-label">
+                                <i class="fas fa-car"></i>
+                                <span>Departure</span>
+                            </div>
+                            <div class="eta-value">${data.eta.departure_time}</div>
+                        </div>
+                        <div class="eta-row">
+                            <div class="eta-label">
+                                <i class="fas fa-flag-checkered"></i>
+                                <span>Arrival</span>
+                            </div>
+                            <div class="eta-value arrival-time">${data.eta.arrival_time}</div>
+                        </div>
+                        <div class="eta-row">
+                            <div class="eta-label">
+                                <i class="fas fa-hourglass-half"></i>
+                                <span>Total Time</span>
+                            </div>
+                            <div class="eta-value">${data.eta.total_travel_time}</div>
+                        </div>
+                        <div class="eta-row">
+                            <div class="eta-label">
+                                <i class="fas fa-traffic-light"></i>
+                                <span>Traffic Impact</span>
+                            </div>
+                            <div class="eta-value traffic-impact">${data.eta.traffic_impact}</div>
+                        </div>
+                        <div class="eta-row">
+                            <div class="eta-label">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <span>Delay</span>
+                            </div>
+                            <div class="eta-value delay">+${data.eta.delay_minutes} min</div>
+                        </div>
+                    </div>
+                    <div class="eta-footer">
+                        <small><i class="far fa-clock"></i> Calculated at ${new Date().toLocaleTimeString()}</small>
+                    </div>
+                </div>
+            `;
+        },
+        
+        // Get current city
+        getCurrentCity: function() {
+            return currentCityData;
         }
     };
 })();
@@ -516,13 +549,6 @@ function initApplication() {
     App.init();
 }
 
-// Make app functions globally available
+// Make functions globally available
 window.App = App;
 window.initApplication = initApplication;
-window.submitForm = () => App.submitForm();
-window.quickPredict = () => App.quickPredict();
-window.locateUser = () => App.locateUser();
-window.checkSystemStatus = () => App.checkSystemStatus();
-window.forceUpdate = () => App.forceUpdate();
-window.zoomToTunisia = () => App.zoomToTunisia();
-window.updateCityHotspots = () => App.updateCityHotspots();

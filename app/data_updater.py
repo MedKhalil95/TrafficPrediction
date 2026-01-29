@@ -7,7 +7,7 @@ import os
 import time
 import threading
 from datetime import datetime, timedelta
-from .config import Config
+from config import Config
 import random
 
 class TrafficDataUpdater:

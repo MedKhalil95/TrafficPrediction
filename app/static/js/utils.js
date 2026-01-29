@@ -1,12 +1,8 @@
-// utils.js - Utility functions for Tunisian Traffic Prediction System
-
+// utils.js - Utility functions
 const Utils = (function() {
-    // Private variables
     let notificationTimeout = null;
     
-    // Public methods
     return {
-        // Show notification
         showNotification: function(message, type = 'info', duration = 3000) {
             // Clear existing timeout
             if (notificationTimeout) {
@@ -20,6 +16,18 @@ const Utils = (function() {
             // Create notification element
             const notification = document.createElement('div');
             notification.className = `notification notification-${type}`;
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 15px;
+                background: ${type === 'success' ? '#28a745' : type === 'error' ? '#dc3545' : type === 'warning' ? '#ffc107' : '#007bff'};
+                color: white;
+                border-radius: 5px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+                z-index: 10000;
+                max-width: 300px;
+            `;
             
             const icons = {
                 success: 'fas fa-check-circle',
@@ -29,18 +37,9 @@ const Utils = (function() {
             };
             
             notification.innerHTML = `
-                <div class="notification-content">
-                    <i class="${icons[type] || 'fas fa-info-circle'}"></i>
-                    <div class="notification-text">
-                        <div class="notification-message">${message}</div>
-                        <div class="notification-time">
-                            ${new Date().toLocaleTimeString('en-TN', { 
-                                hour: '2-digit', 
-                                minute: '2-digit',
-                                second: '2-digit' 
-                            })}
-                        </div>
-                    </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <i class="${icons[type] || 'fas fa-info-circle'}" style="font-size: 20px;"></i>
+                    <div>${message}</div>
                 </div>
             `;
             
@@ -49,7 +48,8 @@ const Utils = (function() {
             
             // Remove after duration
             notificationTimeout = setTimeout(() => {
-                notification.classList.add('notification-hide');
+                notification.style.opacity = '0';
+                notification.style.transform = 'translateX(100%)';
                 setTimeout(() => {
                     if (notification.parentNode) {
                         notification.parentNode.removeChild(notification);
@@ -58,118 +58,50 @@ const Utils = (function() {
             }, duration);
         },
         
-        // Show loading overlay
         showLoading: function(message = 'Loading...') {
-            const overlay = document.getElementById('loadingOverlay');
-            const messageEl = document.getElementById('loadingMessage');
-            
-            if (overlay && messageEl) {
-                messageEl.textContent = message;
+            // Create loading overlay if it doesn't exist
+            let overlay = document.getElementById('loadingOverlay');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'loadingOverlay';
+                overlay.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0,0,0,0.7);
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    z-index: 9999;
+                `;
+                
+                overlay.innerHTML = `
+                    <div style="background: white; padding: 30px; border-radius: 10px; text-align: center; min-width: 300px;">
+                        <div style="font-size: 40px; color: #007bff; margin-bottom: 20px;">
+                            <i class="fas fa-spinner fa-spin"></i>
+                        </div>
+                        <h3 style="margin: 0 0 10px 0; color: #333;">${message}</h3>
+                        <p style="color: #666; margin: 0;">Please wait...</p>
+                    </div>
+                `;
+                
+                document.body.appendChild(overlay);
+            } else {
                 overlay.style.display = 'flex';
+                const messageEl = overlay.querySelector('h3');
+                if (messageEl) messageEl.textContent = message;
             }
         },
         
-        // Hide loading overlay
         hideLoading: function() {
             const overlay = document.getElementById('loadingOverlay');
             if (overlay) {
                 overlay.style.display = 'none';
             }
-        },
-        
-        // Format date
-        formatDate: function(date) {
-            return date.toLocaleDateString('en-TN', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                weekday: 'long',
-                timeZone: 'Africa/Tunis'
-            });
-        },
-        
-        // Format time
-        formatTime: function(date) {
-            return date.toLocaleTimeString('en-TN', {
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: false,
-                timeZone: 'Africa/Tunis'
-            });
-        },
-        
-        // Get day name
-        getDayName: function(dayValue) {
-            const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-            return days[dayValue] || 'Unknown';
-        },
-        
-        // Get hour emoji
-        getHourEmoji: function(hour) {
-            if (hour >= 5 && hour < 12) return '🌅';
-            if (hour >= 12 && hour < 17) return '☀️';
-            if (hour >= 17 && hour < 20) return '🌇';
-            return '🌙';
-        },
-        
-        // Validate form input
-        validateForm: function(formData) {
-            const errors = [];
-            
-            if (isNaN(formData.hour) || formData.hour < 0 || formData.hour > 23) {
-                errors.push('Hour must be between 0 and 23');
-            }
-            
-            if (isNaN(formData.day) || formData.day < 0 || formData.day > 6) {
-                errors.push('Day must be between 0 (Monday) and 6 (Sunday)');
-            }
-            
-            if (isNaN(formData.city) || formData.city < 0 || formData.city > 3) {
-                errors.push('City must be between 0 and 3');
-            }
-            
-            if (isNaN(formData.weather) || formData.weather < 0 || formData.weather > 2) {
-                errors.push('Weather must be between 0 and 2');
-            }
-            
-            return errors;
-        },
-        
-        // Debounce function
-        debounce: function(func, wait) {
-            let timeout;
-            return function executedFunction(...args) {
-                const later = () => {
-                    clearTimeout(timeout);
-                    func(...args);
-                };
-                clearTimeout(timeout);
-                timeout = setTimeout(later, wait);
-            };
-        },
-        
-        // Get traffic load percentage
-        getTrafficLoad: function(trafficLevel) {
-            const loads = {
-                0: "10-30%",
-                1: "40-70%",
-                2: "75-100%"
-            };
-            return loads[trafficLevel] || "Unknown";
-        },
-        
-        // Get travel advisory
-        getTravelAdvisory: function(trafficLevel) {
-            const advisories = {
-                0: "Normal",
-                1: "Caution",
-                2: "Warning"
-            };
-            return advisories[trafficLevel] || "Normal";
         }
     };
 })();
 
-// Make utilities globally available
 window.Utils = Utils;
