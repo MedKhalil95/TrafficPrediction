@@ -24,4 +24,4 @@ def create_app():
     return app
 
 # Remove the immediate app creation at module level
-# app = create_app()  # Comment this out
+app = create_app()  
