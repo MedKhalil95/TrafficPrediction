@@ -383,7 +383,7 @@ const App = (function() {
                 const data = await response.json();
                 
                 if (data.success) {
-                    this.updatePredictionResults(data);
+                    this.updatePredictionResults(data,hour);
                     Utils.showNotification('Traffic prediction updated!', 'success');
                 } else {
                     Utils.showNotification(`Prediction failed: ${data.error}`, 'error');
@@ -397,7 +397,7 @@ const App = (function() {
         },
         
         // Update prediction results
-        updatePredictionResults: function(data) {
+        updatePredictionResults: function(data,hour) {
             // Update traffic level
             const trafficLevel = document.getElementById('trafficLevel');
             if (trafficLevel && data.traffic_level) {
@@ -410,10 +410,11 @@ const App = (function() {
             const trafficMessage = document.getElementById('trafficMessage');
             if (trafficMessage && data.traffic_level) {
                 const cityName = data.city?.name || 'Selected City';
-                trafficMessage.innerHTML = `
-                    <i class="fas fa-prediction"></i> Predicted traffic for ${hour}:00 - 
-                    <strong style="color:${data.traffic_level.color}">${data.traffic_level.level}</strong> conditions
-                `;
+                const hour = parseInt(document.getElementById('hour').value);
+trafficMessage.innerHTML = `
+    <i class="fas fa-prediction"></i> Predicted traffic for ${hour}:00 - 
+    <strong style="color:${data.traffic_level.color}">${data.traffic_level.level}</strong> conditions
+`;
             }
             
             // Show recommendations if available
